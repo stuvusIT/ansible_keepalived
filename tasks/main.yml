@@ -1,2 +1,29 @@
 ---
+- name: Create keepalived configuration directory
+  file:
+    path: /etc/keepalived
+    state: directory
 
+- name: Place config files
+  copy: "{{ config_file | combine({ 'dest': '/etc/keepalived/' + config_file.dest }) }}"
+  loop: "{{ keepalived_config_files }}"
+  loop_control:
+    loop_var: config_file
+  notify:
+    - Restart keepalived service
+
+- name: Install required packages
+  apt:
+    name:
+      - keepalived
+  notify:
+    - Reload systemd configuration
+    - Restart keepalived service
+
+- meta: flush_handlers
+
+- name: Enable keepalived service
+  service:
+    name: keepalived
+    enabled: True
+    state: started
