@@ -1,34 +1,84 @@
 # Role Name
 
-A brief description of the role goes here.
+This role installs and configures [keepalived](https://github.com/acassen/keepalived) on Debian.
 
 
 ## Requirements
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here.
-For instance, if the role uses the EC2 module or depends on other Ansible roles, it may be a good idea to mention in this section that the boto package is required.
+[Debian](https://www.debian.org/).
+Maybe this role also works on other apt based systems.
 
 
 ## Role Variables
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role.
-Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
-
-Don't forget to indent the markdown table so it is readable even if not rendered.
-
-| Name       | Required/Default         | Description                                                                                        |
-|------------|:------------------------:|----------------------------------------------------------------------------------------------------|
-| `example1` | :heavy_check_mark:       | Lorem ipsum dolor sit amet, consetetur sadipscing elitr,                                           |
-| `example2` | :heavy_multiplication_x: | Sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. |
-| `example3` | `True`                   | Stet clita kasd gubergren                                                                          |
-| `example4` | `5`                      | No sea takimata sanctus est Lorem ipsum dolor sit amet.                                            |
+| Name                      | Required | Description                                     |
+| :------------------------ | :------- | :---------------------------------------------- |
+| `keepalived_config_files` | yes      | See [Configuration Files](#configuration-files) |
 
 
-## Example
+## Configuration Files
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+The variable `keepalived_config_files` must contain a list of files to be put on the host in the
+directory `/etc/keepalived`.
+Each item must be a dict containing the keys and values as expected by the
+[copy module](https://docs.ansible.com/ansible/latest/modules/copy_module.html).
+The value of [dest](https://docs.ansible.com/ansible/latest/modules/copy_module.html) will be
+prepended with the aforementioned directory.
+Note that `keepalived_config_files` is required, because you need at least the file
+`/etc/keepalived/keepalived.conf`.
+See [Example Playbook](#example-playbook) for an example.
+
+
+## Example Playbook
+
+The following example playbook assumes that you cloned this role to `roles/keepalived`
+(i.e. the name of the role is `keepalived` instead of `ansible_keepalived`).
 
 ```yml
+- hosts: kube01
+  roles:
+    - role: keepalived
+      keepalived_config_files:
+        - dest: keepalived.conf
+          content: |
+            vrrp_script health_check {
+              script "/etc/keepalived/health_check.sh"
+              interval 2
+              weight -2
+              fall 2
+              rise 2
+            }
+
+            vrrp_instance VI_1 {
+              state BACKUP
+              interface eno2
+              virtual_router_id 120
+              priority 100
+              virtual_ipaddress {
+                  1.2.3.4
+              }
+              track_script {
+                  health_check
+              }
+            }
+
+        - dest: health_check.sh
+          mode: 0755
+          content: |
+            #!/bin/sh
+
+            errorExit() {
+              echo "*** $*" 1>&2
+              exit 1
+            }
+
+            APISERVER_VIP=1.2.3.4
+            APISERVER_DEST_PORT=6443
+
+            curl --silent --max-time 2 --insecure https://localhost:${APISERVER_DEST_PORT}/ -o /dev/null || errorExit "Error GET https://localhost:${APISERVER_DEST_PORT}/"
+            if ip addr | grep -q ${APISERVER_VIP}; then
+              curl --silent --max-time 2 --insecure https://${APISERVER_VIP}:${APISERVER_DEST_PORT}/ -o /dev/null || errorExit "Error GET https://${APISERVER_VIP}:${APISERVER_DEST_PORT}/"
+            fi
 ```
 
 
@@ -39,4 +89,4 @@ This work is licensed under the [MIT License](./LICENSE).
 
 ## Author Information
 
-- [Author Name (nickname)](github profile) _givenname.familyname at stuvus.uni-stuttgart.de_
+- [Sebastian Hasler (haslersn)](https://github.com/haslersn) _sebastian.hasler at stuvus.uni-stuttgart.de_

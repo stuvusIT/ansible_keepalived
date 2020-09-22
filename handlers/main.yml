@@ -1,0 +1,10 @@
+---
+- name: Reload systemd configuration
+  service:
+    daemon_reload: True
+
+- name: Restart keepalived service
+  service:
+    name: keepalived
+    enabled: true
+    state: restarted
